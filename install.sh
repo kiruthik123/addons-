@@ -7,6 +7,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Pterodactyl panel directory
+PTERODACTYL_DIR="/var/www/pterodactyl"
+
 # Blueprint repository base URL (using RAW GitHub URLs)
 BLUEPRINT_REPO_BASE="https://raw.githubusercontent.com/kiruthik123/addons-/main"
 
@@ -39,6 +42,38 @@ display_banner() {
     echo "║   Created by kiruthik123                                 ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+}
+
+# Check if we're in the Pterodactyl directory
+check_pterodactyl_directory() {
+    if [[ ! -d "$PTERODACTYL_DIR" ]]; then
+        echo -e "${RED}Error: Pterodactyl directory not found!${NC}"
+        echo -e "${YELLOW}Expected directory: $PTERODACTYL_DIR${NC}"
+        echo ""
+        echo -e "${YELLOW}Please make sure:${NC}"
+        echo "1. Pterodactyl is installed at $PTERODACTYL_DIR"
+        echo "2. You have the correct permissions"
+        echo ""
+        read -p "Continue anyway? (y/n): " continue_anyway
+        
+        if [[ $continue_anyway != "y" && $continue_anyway != "Y" ]]; then
+            exit 1
+        fi
+    fi
+}
+
+# Change to Pterodactyl directory
+change_to_pterodactyl_dir() {
+    echo -e "${YELLOW}Changing to Pterodactyl directory: $PTERODACTYL_DIR${NC}"
+    
+    if cd "$PTERODACTYL_DIR"; then
+        echo -e "${GREEN}✓ Successfully changed to Pterodactyl directory${NC}"
+        echo -e "${YELLOW}Current directory: $(pwd)${NC}"
+        return 0
+    else
+        echo -e "${RED}✗ Failed to change to Pterodactyl directory${NC}"
+        return 1
+    fi
 }
 
 # Check if blueprint command exists
@@ -104,10 +139,11 @@ main_menu() {
     echo -e "${YELLOW}1.${NC} Install Addons"
     echo -e "${YELLOW}2.${NC} View Available Blueprints"
     echo -e "${YELLOW}3.${NC} Check Blueprint Installation"
-    echo -e "${YELLOW}4.${NC} Update Installer Script"
-    echo -e "${YELLOW}5.${NC} Exit"
+    echo -e "${YELLOW}4.${NC} Check Pterodactyl Directory"
+    echo -e "${YELLOW}5.${NC} Update Installer Script"
+    echo -e "${YELLOW}6.${NC} Exit"
     echo ""
-    read -p "Select an option (1-5): " main_choice
+    read -p "Select an option (1-6): " main_choice
 
     case $main_choice in
         1)
@@ -120,9 +156,12 @@ main_menu() {
             check_blueprint
             ;;
         4)
-            update_installer
+            check_pterodactyl_dir
             ;;
         5)
+            update_installer
+            ;;
+        6)
             echo -e "${GREEN}Goodbye!${NC}"
             exit 0
             ;;
@@ -179,6 +218,12 @@ install_single_blueprint() {
     echo -e "${YELLOW}Blueprint URL: ${blueprint_url}${NC}"
     echo ""
     
+    # Check and change to Pterodactyl directory
+    if ! change_to_pterodactyl_dir; then
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
     echo -e "${YELLOW}Step 1: Downloading blueprint from GitHub...${NC}"
     
     # Create temp directory
@@ -198,25 +243,36 @@ install_single_blueprint() {
                 install_blueprint_cli
                 if ! command -v blueprint &> /dev/null; then
                     echo -e "${RED}Cannot continue without blueprint command.${NC}"
+                    echo -e "${YELLOW}Blueprint saved at: $TEMP_DIR/$blueprint_file${NC}"
+                    echo -e "${YELLOW}You can install it later from Pterodactyl directory:${NC}"
+                    echo "cd $PTERODACTYL_DIR && blueprint -i \"$TEMP_DIR/$blueprint_file\""
                     read -p "Press Enter to continue..."
                     return
                 fi
             else
                 echo -e "${YELLOW}Skipping installation. You can install manually later.${NC}"
                 echo -e "${YELLOW}Blueprint saved at: $TEMP_DIR/$blueprint_file${NC}"
+                echo -e "${YELLOW}Install it later from Pterodactyl directory:${NC}"
+                echo "cd $PTERODACTYL_DIR && blueprint -i \"$TEMP_DIR/$blueprint_file\""
                 read -p "Press Enter to continue..."
                 return
             fi
         fi
         
         # Install using blueprint command
+        echo -e "${YELLOW}Current directory: $(pwd)${NC}"
         echo -e "${YELLOW}Running: blueprint -i \"$TEMP_DIR/$blueprint_file\"${NC}"
+        
         if blueprint -i "$TEMP_DIR/$blueprint_file"; then
             echo -e "${GREEN}✓ Successfully installed ${blueprint_name}!${NC}"
+            
+            # Run panel commands if installation successful
+            echo -e "${YELLOW}Step 3: Running panel maintenance commands...${NC}"
+            run_panel_commands
         else
             echo -e "${RED}✗ Failed to install ${blueprint_name}${NC}"
             echo -e "${YELLOW}You can try installing manually:${NC}"
-            echo "blueprint -i \"$TEMP_DIR/$blueprint_file\""
+            echo "cd $PTERODACTYL_DIR && blueprint -i \"$TEMP_DIR/$blueprint_file\""
         fi
         
         # Ask if user wants to keep the blueprint file
@@ -253,6 +309,12 @@ install_all_blueprints() {
         return
     fi
     
+    # Check and change to Pterodactyl directory
+    if ! change_to_pterodactyl_dir; then
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
     # Check blueprint command
     if ! command -v blueprint &> /dev/null; then
         echo -e "${RED}Blueprint command not found!${NC}"
@@ -277,6 +339,10 @@ install_all_blueprints() {
     
     success_count=0
     fail_count=0
+    failed_blueprints=()
+    
+    echo -e "${YELLOW}Current directory: $(pwd)${NC}"
+    echo ""
     
     for blueprint_file in "${BLUEPRINTS[@]}"; do
         local blueprint_name="${blueprint_file%.blueprint}"
@@ -289,12 +355,13 @@ install_all_blueprints() {
         # Download the blueprint file
         if curl -s -f -L "$blueprint_url" -o "$TEMP_DIR/$blueprint_file"; then
             # Install using blueprint command
-            if blueprint -i "$TEMP_DIR/$blueprint_file" &> /dev/null; then
+            if blueprint -i "$TEMP_DIR/$blueprint_file"; then
                 echo -e "${GREEN}✓ ${blueprint_name} installed${NC}"
                 ((success_count++))
             else
                 echo -e "${RED}✗ ${blueprint_name} failed to install${NC}"
                 ((fail_count++))
+                failed_blueprints+=("$blueprint_name")
             fi
             
             # Clean up
@@ -302,6 +369,7 @@ install_all_blueprints() {
         else
             echo -e "${RED}✗ ${blueprint_name} failed to download${NC}"
             ((fail_count++))
+            failed_blueprints+=("$blueprint_name")
         fi
     done
     
@@ -309,15 +377,65 @@ install_all_blueprints() {
     echo -e "${GREEN}Installation Complete!${NC}"
     echo -e "Successfully installed: ${success_count}"
     echo -e "Failed: ${fail_count}"
-    echo ""
+    
+    if [[ ${#failed_blueprints[@]} -gt 0 ]]; then
+        echo -e "${YELLOW}Failed blueprints: ${failed_blueprints[*]}${NC}"
+    fi
+    
+    # Run panel commands if any were successful
+    if [[ $success_count -gt 0 ]]; then
+        echo ""
+        echo -e "${YELLOW}Running panel maintenance commands...${NC}"
+        run_panel_commands
+    fi
     
     # Clean temp directory if empty
     if [ -z "$(ls -A $TEMP_DIR)" ]; then
         rmdir "$TEMP_DIR"
     fi
     
+    echo ""
     read -p "Press Enter to continue..."
     install_addons_menu
+}
+
+# Run panel maintenance commands
+run_panel_commands() {
+    echo ""
+    read -p "Run panel maintenance commands? (y/n): " run_cmds
+    
+    if [[ $run_cmds == "y" || $run_cmds == "Y" ]]; then
+        echo -e "${YELLOW}Running panel commands...${NC}"
+        
+        # Check if we're in the correct directory
+        if [[ $(pwd) != "$PTERODACTYL_DIR" ]]; then
+            echo -e "${YELLOW}Changing to Pterodactyl directory...${NC}"
+            cd "$PTERODACTYL_DIR" || {
+                echo -e "${RED}Failed to change directory${NC}"
+                return
+            }
+        fi
+        
+        # Run common panel commands
+        commands=(
+            "php artisan cache:clear"
+            "php artisan view:clear"
+            "php artisan config:cache"
+            "php artisan queue:restart"
+        )
+        
+        for cmd in "${commands[@]}"; do
+            echo -e "${YELLOW}Running: $cmd${NC}"
+            if eval "$cmd"; then
+                echo -e "${GREEN}✓ Command successful${NC}"
+            else
+                echo -e "${RED}✗ Command failed${NC}"
+            fi
+            echo ""
+        done
+        
+        echo -e "${GREEN}Panel maintenance complete!${NC}"
+    fi
 }
 
 # Install custom blueprint from URL
@@ -332,6 +450,12 @@ install_custom_blueprint() {
         echo -e "${RED}No URL provided!${NC}"
         sleep 2
         install_addons_menu
+        return
+    fi
+    
+    # Check and change to Pterodactyl directory
+    if ! change_to_pterodactyl_dir; then
+        read -p "Press Enter to continue..."
         return
     fi
     
@@ -354,15 +478,23 @@ install_custom_blueprint() {
             echo -e "${RED}Blueprint command not found!${NC}"
             echo -e "${YELLOW}Blueprint saved at: $TEMP_DIR/$blueprint_file${NC}"
             echo -e "${YELLOW}Install blueprint-cli first, then run:${NC}"
-            echo "blueprint -i \"$TEMP_DIR/$blueprint_file\""
+            echo "cd $PTERODACTYL_DIR && blueprint -i \"$TEMP_DIR/$blueprint_file\""
             read -p "Press Enter to continue..."
             return
         fi
         
         # Install using blueprint command
+        echo -e "${YELLOW}Current directory: $(pwd)${NC}"
         echo -e "${YELLOW}Installing with blueprint command...${NC}"
         if blueprint -i "$TEMP_DIR/$blueprint_file"; then
             echo -e "${GREEN}✓ Successfully installed custom blueprint!${NC}"
+            
+            # Run panel commands
+            echo ""
+            read -p "Run panel maintenance commands? (y/n): " run_cmds
+            if [[ $run_cmds == "y" || $run_cmds == "Y" ]]; then
+                run_panel_commands
+            fi
         else
             echo -e "${RED}✗ Failed to install blueprint${NC}"
         fi
@@ -421,6 +553,54 @@ check_blueprint() {
     main_menu
 }
 
+# Check Pterodactyl directory
+check_pterodactyl_dir() {
+    display_banner
+    echo -e "${GREEN}Pterodactyl Directory Check:${NC}"
+    echo ""
+    
+    if [[ -d "$PTERODACTYL_DIR" ]]; then
+        echo -e "${GREEN}✓ Pterodactyl directory exists: $PTERODACTYL_DIR${NC}"
+        
+        # Check permissions
+        if [[ -w "$PTERODACTYL_DIR" ]]; then
+            echo -e "${GREEN}✓ You have write permissions${NC}"
+        else
+            echo -e "${RED}✗ You don't have write permissions${NC}"
+            echo -e "${YELLOW}Try running with sudo or change permissions${NC}"
+        fi
+        
+        # Show current directory
+        echo -e "${YELLOW}Current directory: $(pwd)${NC}"
+        
+        # Try to change directory
+        echo ""
+        echo -e "${YELLOW}Testing directory change...${NC}"
+        if cd "$PTERODACTYL_DIR"; then
+            echo -e "${GREEN}✓ Can change to directory${NC}"
+            echo -e "${YELLOW}Test directory: $(pwd)${NC}"
+            # Go back to original directory
+            cd - > /dev/null
+        else
+            echo -e "${RED}✗ Cannot change to directory${NC}"
+        fi
+    else
+        echo -e "${RED}✗ Pterodactyl directory not found: $PTERODACTYL_DIR${NC}"
+        echo ""
+        echo -e "${YELLOW}Common installation locations:${NC}"
+        echo "  /var/www/pterodactyl"
+        echo "  /var/www/html/pterodactyl"
+        echo "  /var/www/panel"
+        echo "  /var/www/html/panel"
+        echo ""
+        echo -e "${YELLOW}You can modify the PTERODACTYL_DIR variable in this script${NC}"
+    fi
+    
+    echo ""
+    read -p "Press Enter to return to main menu..."
+    main_menu
+}
+
 # Update installer script
 update_installer() {
     display_banner
@@ -468,6 +648,9 @@ main() {
         echo "Install it with: sudo apt-get install curl"
         exit 1
     fi
+    
+    # Check Pterodactyl directory
+    check_pterodactyl_directory
     
     # Create temp directory
     mkdir -p /tmp/pterodactyl-addons
