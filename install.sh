@@ -138,23 +138,9 @@ install_blueprint() {
     
     print_success "Blueprint installation completed!"
     
-    # Install blueprint files from repository
-    print_info "Installing blueprint extensions..."
-    cd "$PTERODACTYL_DIR" || exit 1
-    
-    # Create blueprints directory if it doesn't exist
-    mkdir -p .blueprint/extensions
-    
-    # Copy blueprint files (assuming they're in the current directory)
-    for blueprint_file in *.blueprint; do
-        if [ -f "$blueprint_file" ]; then
-            print_info "Installing ${blueprint_file}..."
-            bash .blueprint/blueprint.sh -i "$blueprint_file"
-        fi
-    done
-    
     echo ""
     print_success "Blueprint framework installed successfully!"
+    print_info "You can now install addons from the 'Manage Addons' menu"
     press_any_key
 }
 
@@ -229,25 +215,133 @@ install_addon() {
     if [ "$addon_choice" -ge 1 ] && [ "$addon_choice" -le "${#addons[@]}" ]; then
         local selected_addon="${addons[$((addon_choice-1))]}"
         
+        print_info "Downloading ${selected_addon} from GitHub..."
+        
+        # GitHub repository URL (update with your actual GitHub username/repo)
+        local GITHUB_USER="kiruthik123"
+        local GITHUB_REPO="blueprintmain"
+        local GITHUB_BRANCH="main"
+        local DOWNLOAD_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${selected_addon}"
+        
+        # Create temporary directory for downloads
+        mkdir -p /tmp/blueprint-addons
+        
+        # Download the blueprint file
+        wget -q --show-progress "${DOWNLOAD_URL}" -O "/tmp/blueprint-addons/${selected_addon}"
+        
+        if [ $? -ne 0 ]; then
+            print_error "Failed to download ${selected_addon} from GitHub"
+            print_info "URL: ${DOWNLOAD_URL}"
+            print_warning "Please check if the file exists in your repository"
+            press_any_key
+            return 1
+        fi
+        
+        print_success "Download completed!"
         print_info "Installing ${selected_addon}..."
         
         cd "$PTERODACTYL_DIR" || exit 1
         
-        if [ -f "$selected_addon" ]; then
-            bash .blueprint/blueprint.sh -i "$selected_addon"
-            
-            if [ $? -eq 0 ]; then
-                print_success "${selected_addon} installed successfully!"
-            else
-                print_error "Failed to install ${selected_addon}"
-            fi
+        # Install the downloaded blueprint
+        bash .blueprint/blueprint.sh -i "/tmp/blueprint-addons/${selected_addon}"
+        
+        if [ $? -eq 0 ]; then
+            print_success "${selected_addon} installed successfully!"
+            # Clean up downloaded file
+            rm -f "/tmp/blueprint-addons/${selected_addon}"
         else
-            print_error "Blueprint file not found: ${selected_addon}"
-            print_info "Make sure the blueprint file is in the Pterodactyl directory"
+            print_error "Failed to install ${selected_addon}"
+            print_info "Downloaded file is available at: /tmp/blueprint-addons/${selected_addon}"
         fi
     else
         print_error "Invalid selection"
     fi
+    
+    press_any_key
+}
+
+install_all_addons() {
+    print_header
+    echo -e "${PURPLE}Installing All Addons from GitHub...${NC}"
+    echo ""
+    
+    print_warning "This will download and install all 16 blueprint extensions"
+    read -p "Do you want to continue? (yes/no): " confirm
+    
+    if [ "$confirm" != "yes" ]; then
+        print_info "Installation cancelled"
+        press_any_key
+        return
+    fi
+    
+    local addons=(
+        "activitypurges.blueprint"
+        "consolelogs.blueprint"
+        "huxregister.blueprint"
+        "laravellogs.blueprint"
+        "lyrdyannounce.blueprint"
+        "mclogs.blueprint"
+        "modrinthbrowser.blueprint"
+        "nightsadmin.blueprint"
+        "resourcealerts.blueprint"
+        "resourcemanager.blueprint"
+        "serverbackgrounds.blueprint"
+        "shownodeids.blueprint"
+        "simplefooters.blueprint"
+        "translations.blueprint"
+        "urldownloader.blueprint"
+        "votifiertester.blueprint"
+    )
+    
+    # GitHub repository URL
+    local GITHUB_USER="kiruthik123"
+    local GITHUB_REPO="blueprintmain"
+    local GITHUB_BRANCH="main"
+    
+    # Create temporary directory for downloads
+    mkdir -p /tmp/blueprint-addons
+    
+    local success_count=0
+    local fail_count=0
+    
+    for addon in "${addons[@]}"; do
+        echo ""
+        print_info "Processing ${addon}..."
+        
+        local DOWNLOAD_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${addon}"
+        
+        # Download the blueprint file
+        wget -q --show-progress "${DOWNLOAD_URL}" -O "/tmp/blueprint-addons/${addon}" 2>&1
+        
+        if [ $? -ne 0 ]; then
+            print_error "Failed to download ${addon}"
+            ((fail_count++))
+            continue
+        fi
+        
+        # Install the downloaded blueprint
+        cd "$PTERODACTYL_DIR" || exit 1
+        bash .blueprint/blueprint.sh -i "/tmp/blueprint-addons/${addon}" > /dev/null 2>&1
+        
+        if [ $? -eq 0 ]; then
+            print_success "${addon} installed successfully!"
+            ((success_count++))
+            rm -f "/tmp/blueprint-addons/${addon}"
+        else
+            print_error "Failed to install ${addon}"
+            ((fail_count++))
+        fi
+        
+        sleep 1
+    done
+    
+    echo ""
+    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║        Installation Summary            ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}Successful:${NC} ${success_count}"
+    echo -e "${RED}Failed:${NC} ${fail_count}"
+    echo ""
     
     press_any_key
 }
@@ -258,9 +352,10 @@ manage_addons() {
         echo -e "${PURPLE}Addon Management${NC}"
         echo ""
         echo -e "${GREEN}1.${NC} List Available Addons"
-        echo -e "${GREEN}2.${NC} Install Addon"
-        echo -e "${GREEN}3.${NC} Remove Addon"
-        echo -e "${GREEN}4.${NC} List Installed Addons"
+        echo -e "${GREEN}2.${NC} Install Single Addon"
+        echo -e "${GREEN}3.${NC} Install All Addons"
+        echo -e "${GREEN}4.${NC} Remove Addon"
+        echo -e "${GREEN}5.${NC} List Installed Addons"
         echo -e "${GREEN}0.${NC} Back to Main Menu"
         echo ""
         read -p "Enter your choice: " addon_menu_choice
@@ -274,9 +369,12 @@ manage_addons() {
                 install_addon
                 ;;
             3)
-                remove_addon
+                install_all_addons
                 ;;
             4)
+                remove_addon
+                ;;
+            5)
                 list_installed_addons
                 ;;
             0)
