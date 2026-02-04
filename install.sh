@@ -1,395 +1,258 @@
 #!/bin/bash
 
-#######################################
-# Pterodactyl Blueprint Addon Installer
-# Author: kiruthik123
-# Description: Install Blueprint addons from kiruthik123/addons- repository
-#######################################
-
-# Color codes
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# Script variables
-SCRIPT_VERSION="1.0.0"
-PTERODACTYL_DIR="/var/www/pterodactyl"
-GITHUB_USER="kiruthik123"
-GITHUB_REPO="addons-"
-GITHUB_BRANCH="main"
-BASE_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}"
+# Blueprint repository base URL
+BLUEPRINT_REPO_BASE="https://raw.githubusercontent.com/kiruthik123/pterodactyl-blueprints/main"
 
-# Addon list from your repository (corrected names from the image)
-ADDONS=(
-    "activitypugress.blueprint"
+# List of available blueprints
+BLUEPRINTS=(
+    "activitypurges.blueprint"
     "console.logs.blueprint"
-    "huregister.blueprint"
-    "brawelogs.blueprint"
-    "lydynamous.blueprint"
-    "mcdogs.blueprint"
+    "huxregister.blueprint"
+    "laravellogs.blueprint"
+    "lyrdyannounce.blueprint"
+    "mdlogs.blueprint"
     "modrinthbrowser.blueprint"
-    "nighthawk.in.blueprint"
-    "resources.lints.blueprint"
-    "resource.manager.blueprint"
+    "nightadmin.blueprint"
+    "resourcealerts.blueprint"
+    "resourcemanager.blueprint"
     "serverbackgrounds.blueprint"
-    "showmodels.blueprint"
-    "sim.pfefooters.blueprint"
-    "transitions.blueprint"
+    "shownodeids.blueprint"
+    "simplefooters.blueprint"
+    "translations.blueprint"
     "urldownloader.blueprint"
-    "votifilter.blueprint"
+    "votifiertester.blueprint"
 )
 
-# Function to print colored output
-print_success() { echo -e "${GREEN}✓${NC} $1"; }
-print_error() { echo -e "${RED}✗${NC} $1"; }
-print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-print_info() { echo -e "${BLUE}ℹ${NC} $1"; }
-print_header() { echo -e "${CYAN}$1${NC}"; }
+# Display banner
+display_banner() {
+    clear
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║   Pterodactyl Panel Addons Installer                     ║"
+    echo "║   Created by kiruthik123                                 ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
 
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        print_error "This script must be run as root!"
-        echo "Please run with: sudo $0"
+# Check if blueprint command exists
+check_blueprint_installation() {
+    if ! command -v blueprint &> /dev/null; then
+        echo -e "${RED}Error: blueprint command not found!${NC}"
+        echo -e "${YELLOW}Please install blueprint-cli first:${NC}"
+        echo "npm install -g @pterodactyl/blueprint-cli"
+        echo -e "${YELLOW}Or visit: https://docs.blueprint.zip${NC}"
         exit 1
     fi
 }
 
-check_pterodactyl() {
-    if [ ! -d "$PTERODACTYL_DIR" ]; then
-        print_error "Pterodactyl directory not found at: $PTERODACTYL_DIR"
-        return 1
-    fi
-    return 0
+# Display main menu
+main_menu() {
+    display_banner
+    echo -e "${GREEN}Main Menu:${NC}"
+    echo -e "${YELLOW}1.${NC} Install Addons"
+    echo -e "${YELLOW}2.${NC} View Available Blueprints"
+    echo -e "${YELLOW}3.${NC} Check Blueprint Installation"
+    echo -e "${YELLOW}4.${NC} Exit"
+    echo ""
+    read -p "Select an option (1-4): " main_choice
+
+    case $main_choice in
+        1)
+            install_addons_menu
+            ;;
+        2)
+            view_blueprints
+            ;;
+        3)
+            check_blueprint
+            ;;
+        4)
+            echo -e "${GREEN}Goodbye!${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option!${NC}"
+            sleep 2
+            main_menu
+            ;;
+    esac
 }
 
+# Display install addons menu
+install_addons_menu() {
+    display_banner
+    echo -e "${GREEN}Install Addons:${NC}"
+    
+    # Display all blueprints with numbers
+    for i in "${!BLUEPRINTS[@]}"; do
+        blueprint_name="${BLUEPRINTS[$i]%.blueprint}"
+        echo -e "${YELLOW}$((i+1)).${NC} ${blueprint_name}"
+    done
+    
+    echo -e "${YELLOW}$((${#BLUEPRINTS[@]}+1)).${NC} Install All Blueprints"
+    echo -e "${YELLOW}$((${#BLUEPRINTS[@]}+2)).${NC} Back to Main Menu"
+    echo ""
+    
+    read -p "Select blueprint to install (1-$((${#BLUEPRINTS[@]}+2))): " choice
+    
+    if [[ $choice -eq $((${#BLUEPRINTS[@]}+1)) ]]; then
+        install_all_blueprints
+    elif [[ $choice -eq $((${#BLUEPRINTS[@]}+2)) ]]; then
+        main_menu
+    elif [[ $choice -ge 1 && $choice -le ${#BLUEPRINTS[@]} ]]; then
+        install_single_blueprint $((choice-1))
+    else
+        echo -e "${RED}Invalid selection!${NC}"
+        sleep 2
+        install_addons_menu
+    fi
+}
+
+# Install a single blueprint
+install_single_blueprint() {
+    local index=$1
+    local blueprint_file="${BLUEPRINTS[$index]}"
+    local blueprint_name="${blueprint_file%.blueprint}"
+    
+    display_banner
+    echo -e "${GREEN}Installing: ${blueprint_name}${NC}"
+    echo -e "${YELLOW}Downloading blueprint...${NC}"
+    
+    # Download the blueprint file
+    if curl -s -f "${BLUEPRINT_REPO_BASE}/${blueprint_file}" -o "/tmp/${blueprint_file}"; then
+        echo -e "${GREEN}Blueprint downloaded successfully!${NC}"
+        echo -e "${YELLOW}Installing with blueprint command...${NC}"
+        
+        # Install using blueprint command
+        if blueprint -i "/tmp/${blueprint_file}"; then
+            echo -e "${GREEN}Successfully installed ${blueprint_name}!${NC}"
+        else
+            echo -e "${RED}Failed to install ${blueprint_name}${NC}"
+        fi
+        
+        # Clean up
+        rm -f "/tmp/${blueprint_file}"
+    else
+        echo -e "${RED}Failed to download ${blueprint_file}${NC}"
+        echo -e "${YELLOW}Make sure you have internet connection${NC}"
+    fi
+    
+    echo ""
+    read -p "Press Enter to continue..."
+    install_addons_menu
+}
+
+# Install all blueprints
+install_all_blueprints() {
+    display_banner
+    echo -e "${GREEN}Installing All Blueprints${NC}"
+    echo -e "${YELLOW}This will install ${#BLUEPRINTS[@]} blueprints${NC}"
+    echo ""
+    read -p "Are you sure? (y/n): " confirm
+    
+    if [[ $confirm != "y" && $confirm != "Y" ]]; then
+        install_addons_menu
+        return
+    fi
+    
+    success_count=0
+    fail_count=0
+    
+    for blueprint_file in "${BLUEPRINTS[@]}"; do
+        local blueprint_name="${blueprint_file%.blueprint}"
+        echo -e "${BLUE}Installing: ${blueprint_name}${NC}"
+        
+        # Download the blueprint file
+        if curl -s -f "${BLUEPRINT_REPO_BASE}/${blueprint_file}" -o "/tmp/${blueprint_file}"; then
+            # Install using blueprint command
+            if blueprint -i "/tmp/${blueprint_file}" &> /dev/null; then
+                echo -e "${GREEN}✓ ${blueprint_name} installed${NC}"
+                ((success_count++))
+            else
+                echo -e "${RED}✗ ${blueprint_name} failed to install${NC}"
+                ((fail_count++))
+            fi
+            
+            # Clean up
+            rm -f "/tmp/${blueprint_file}"
+        else
+            echo -e "${RED}✗ ${blueprint_name} failed to download${NC}"
+            ((fail_count++))
+        fi
+    done
+    
+    echo ""
+    echo -e "${GREEN}Installation Complete!${NC}"
+    echo -e "Successfully installed: ${success_count}"
+    echo -e "Failed: ${fail_count}"
+    echo ""
+    read -p "Press Enter to continue..."
+    install_addons_menu
+}
+
+# View available blueprints
+view_blueprints() {
+    display_banner
+    echo -e "${GREEN}Available Blueprints:${NC}"
+    echo ""
+    
+    for blueprint_file in "${BLUEPRINTS[@]}"; do
+        blueprint_name="${blueprint_file%.blueprint}"
+        echo -e "  ${YELLOW}●${NC} ${blueprint_name}"
+    done
+    
+    echo ""
+    echo -e "${YELLOW}Total: ${#BLUEPRINTS[@]} blueprints available${NC}"
+    echo ""
+    read -p "Press Enter to return to main menu..."
+    main_menu
+}
+
+# Check blueprint installation
 check_blueprint() {
-    if [ ! -d "$PTERODACTYL_DIR/.blueprint" ]; then
-        print_error "Blueprint framework not found!"
-        print_info "Blueprint must be installed first through Pterodactyl panel."
-        return 1
-    fi
+    display_banner
+    echo -e "${GREEN}Blueprint Installation Check:${NC}"
+    echo ""
     
-    if [ ! -f "$PTERODACTYL_DIR/.blueprint/blueprint.sh" ]; then
-        print_error "Blueprint script not found!"
-        return 1
-    fi
-    
-    return 0
-}
-
-check_internet() {
-    if ! ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
-        print_error "No internet connection detected!"
-        return 1
-    fi
-    return 0
-}
-
-download_addon() {
-    local addon="$1"
-    local url="${BASE_URL}/${addon}"
-    local output="/tmp/${addon}"
-    
-    print_info "Downloading: $addon"
-    
-    # Try wget first, then curl
-    if command -v wget > /dev/null 2>&1; then
-        if wget -q --timeout=10 --tries=2 "$url" -O "$output"; then
-            return 0
-        fi
-    fi
-    
-    if command -v curl > /dev/null 2>&1; then
-        if curl -s -f -L "$url" -o "$output"; then
-            return 0
-        fi
-    fi
-    
-    print_error "Failed to download: $addon"
-    return 1
-}
-
-install_addon() {
-    local addon="$1"
-    
-    if ! download_addon "$addon"; then
-        return 1
-    fi
-    
-    # Check if blueprint is available
-    if ! check_blueprint; then
-        print_error "Cannot install addons. Blueprint framework not available."
-        return 1
-    fi
-    
-    cd "$PTERODACTYL_DIR" || {
-        print_error "Cannot access Pterodactyl directory"
-        return 1
-    }
-    
-    print_info "Installing: $addon"
-    
-    if [ -f "/tmp/$addon" ]; then
-        if bash .blueprint/blueprint.sh -i "/tmp/$addon" 2>/dev/null; then
-            print_success "Successfully installed: $addon"
-            rm -f "/tmp/$addon"
-            return 0
-        else
-            print_error "Blueprint installation failed for: $addon"
-            print_info "You can try installing it manually from the Pterodactyl panel"
-            return 1
-        fi
+    if command -v blueprint &> /dev/null; then
+        echo -e "${GREEN}✓ blueprint command is available${NC}"
+        blueprint_version=$(blueprint --version 2>/dev/null || echo "unknown")
+        echo -e "  Version: ${blueprint_version}"
     else
-        print_error "Addon file not found: /tmp/$addon"
-        return 1
-    fi
-}
-
-list_addons() {
-    clear
-    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     Available Blueprint Addons         ║${NC}"
-    echo -e "${CYAN}║        (Total: ${#ADDONS[@]} addons)          ║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    local i=1
-    for addon in "${ADDONS[@]}"; do
-        printf "${GREEN}%2d.${NC} %s\n" "$i" "$addon"
-        ((i++))
-    done
-    
-    echo ""
-}
-
-install_single_addon() {
-    list_addons
-    
-    echo ""
-    read -p "Enter addon number (1-${#ADDONS[@]}) or 0 to cancel: " choice
-    
-    if [[ "$choice" == "0" ]]; then
-        print_info "Installation cancelled."
-        return
-    fi
-    
-    if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
-        print_error "Please enter a valid number!"
-        sleep 2
-        return
-    fi
-    
-    if [ "$choice" -lt 1 ] || [ "$choice" -gt "${#ADDONS[@]}" ]; then
-        print_error "Invalid number! Please choose between 1 and ${#ADDONS[@]}"
-        sleep 2
-        return
-    fi
-    
-    local index=$((choice-1))
-    local selected_addon="${ADDONS[$index]}"
-    
-    clear
-    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     Installing: $selected_addon$(printf '%*s' $((31-${#selected_addon})) '')║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    if install_addon "$selected_addon"; then
+        echo -e "${RED}✗ blueprint command not found${NC}"
         echo ""
-        print_success "Addon installation completed!"
-        print_info "Please check your Pterodactyl panel to see the new addon."
-    else
+        echo -e "${YELLOW}To install blueprint-cli:${NC}"
+        echo "npm install -g @pterodactyl/blueprint-cli"
         echo ""
-        print_error "Failed to install addon!"
+        echo -e "${YELLOW}Make sure Node.js is installed first:${NC}"
+        echo "curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -"
+        echo "sudo apt-get install -y nodejs"
     fi
     
     echo ""
-    read -p "Press any key to continue..." -n1 -s
-    echo ""
+    read -p "Press Enter to return to main menu..."
+    main_menu
 }
 
-install_all_addons() {
-    clear
-    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     Installing ALL Addons              ║${NC}"
-    echo -e "${CYAN}║        (${#ADDONS[@]} addons total)             ║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    print_warning "This will install all ${#ADDONS[@]} addons. This may take a few minutes."
-    echo ""
-    read -p "Are you sure? (yes/no): " confirm
-    
-    if [[ "$confirm" != "yes" ]]; then
-        print_info "Installation cancelled."
-        return
-    fi
-    
-    # Check internet connection
-    if ! check_internet; then
-        print_error "Cannot proceed without internet connection."
-        return
-    fi
-    
-    local success=0
-    local failed=0
-    
-    for addon in "${ADDONS[@]}"; do
-        echo ""
-        echo -e "${CYAN}────────────────────────────────────${NC}"
-        
-        if install_addon "$addon"; then
-            ((success++))
-        else
-            ((failed++))
-        fi
-        
-        # Small delay to avoid rate limiting
-        sleep 1
-    done
-    
-    echo ""
-    echo -e "${CYAN}════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${CYAN}Installation Summary:${NC}"
-    echo -e "${GREEN}  Successfully installed: $success${NC}"
-    echo -e "${RED}  Failed to install: $failed${NC}"
-    echo -e "${BLUE}  Total addons processed: ${#ADDONS[@]}${NC}"
-    echo ""
-    
-    if [ $success -gt 0 ]; then
-        print_success "Some addons were installed successfully!"
-        print_info "Please refresh your Pterodactyl panel to see the new addons."
-    fi
-    
-    echo ""
-    read -p "Press any key to continue..." -n1 -s
-    echo ""
-}
-
-check_system_status() {
-    clear
-    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     System Status Check               ║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
-    echo ""
-    
-    # Check Pterodactyl
-    if check_pterodactyl; then
-        print_success "Pterodactyl found at: $PTERODACTYL_DIR"
-    else
-        print_error "Pterodactyl not found at: $PTERODACTYL_DIR"
-    fi
-    
-    # Check Blueprint
-    if check_blueprint; then
-        print_success "Blueprint framework is installed"
-    else
-        print_warning "Blueprint framework is NOT installed"
-        print_info "You need to install Blueprint from your Pterodactyl panel first."
-        print_info "Go to: Admin → Extensions → Blueprint"
-    fi
-    
-    # Check internet
-    if check_internet; then
-        print_success "Internet connection is available"
-    else
-        print_warning "No internet connection detected"
-    fi
-    
-    # Check required tools
-    if command -v wget > /dev/null 2>&1 || command -v curl > /dev/null 2>&1; then
-        print_success "Download tools are available"
-    else
-        print_error "No download tools found (wget or curl)"
-        print_info "Please install wget or curl: apt-get install wget"
-    fi
-    
-    echo ""
-    print_info "Available addons in repository: ${#ADDONS[@]}"
-    print_info "GitHub Repository: ${GITHUB_USER}/${GITHUB_REPO}"
-    
-    echo ""
-    read -p "Press any key to continue..." -n1 -s
-    echo ""
-}
-
-show_main_menu() {
-    clear
-    echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║    Pterodactyl Blueprint Addon Manager ║${NC}"
-    echo -e "${CYAN}║        GitHub: kiruthik123/addons-     ║${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${GREEN}1.${NC} List all available addons"
-    echo -e "${GREEN}2.${NC} Install single addon"
-    echo -e "${GREEN}3.${NC} Install all addons"
-    echo -e "${GREEN}4.${NC} Check system status"
-    echo -e "${GREEN}5.${NC} Check Blueprint installation"
-    echo -e "${GREEN}0.${NC} Exit"
-    echo ""
-}
-
+# Main script execution
 main() {
-    # Check if running as root
-    check_root
-    
-    # Check if Pterodactyl exists (but don't exit if not)
-    if ! check_pterodactyl; then
-        echo ""
-        print_warning "Pterodactyl not found at the default location."
-        print_info "If Pterodactyl is installed elsewhere, please update the script."
-        echo ""
+    # Check for dependencies
+    if ! command -v curl &> /dev/null; then
+        echo -e "${RED}Error: curl is not installed!${NC}"
+        echo "Install it with: sudo apt-get install curl"
+        exit 1
     fi
     
-    # Main menu loop
-    while true; do
-        show_main_menu
-        read -p "Enter your choice (0-5): " choice
-        
-        case $choice in
-            1)
-                list_addons
-                echo ""
-                read -p "Press any key to continue..." -n1 -s
-                ;;
-            2)
-                install_single_addon
-                ;;
-            3)
-                install_all_addons
-                ;;
-            4)
-                check_system_status
-                ;;
-            5)
-                # Just check blueprint status
-                clear
-                if check_blueprint; then
-                    print_success "Blueprint is properly installed!"
-                else
-                    print_error "Blueprint is NOT installed or has issues."
-                fi
-                echo ""
-                read -p "Press any key to continue..." -n1 -s
-                ;;
-            0)
-                echo ""
-                print_info "Thank you for using Blueprint Addon Manager!"
-                echo ""
-                exit 0
-                ;;
-            *)
-                print_error "Invalid option! Please choose 0-5"
-                sleep 2
-                ;;
-        esac
-    done
+    check_blueprint_installation
+    main_menu
 }
 
-# Run the script
+# Run main function
 main
