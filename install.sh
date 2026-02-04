@@ -17,9 +17,9 @@ PANEL_DIR="/var/www/pterodactyl"
 BLUEPRINT_DIR="${PANEL_DIR}/blueprint"
 
 # GitHub Configuration - UPDATE THESE VALUES
-GITHUB_USER="kiruthik123"
-GITHUB_REPO="addons-"
-GITHUB_BRANCH="main"
+GITHUB_USER="kiruthik123"            # Your GitHub username
+GITHUB_REPO="addons-"                # Your repository name
+GITHUB_BRANCH="main"                 # Branch name (main or master)
 
 # Alternative: Direct URLs to .blueprint files (comma-separated)
 # BLUEPRINT_URLS="https://github.com/user/repo/raw/main/addon1.blueprint,https://github.com/user/repo/raw/main/addon2.blueprint"
@@ -125,27 +125,61 @@ download_from_github() {
     else
         print_info "Downloading from repository: $GITHUB_USER/$GITHUB_REPO"
         
+        # Validate GitHub configuration
+        if [ "$GITHUB_USER" == "yourusername" ] || [ "$GITHUB_REPO" == "your-repo-name" ]; then
+            print_error "GitHub configuration not updated!"
+            print_warning "Please edit the script and set:"
+            echo "  GITHUB_USER=\"your-actual-username\""
+            echo "  GITHUB_REPO=\"your-actual-repo-name\""
+            echo ""
+            print_info "Current values:"
+            echo "  GITHUB_USER=\"$GITHUB_USER\""
+            echo "  GITHUB_REPO=\"$GITHUB_REPO\""
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+        
         REPO_URL="https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/$GITHUB_BRANCH.zip"
         
         print_info "Fetching repository archive..."
-        if curl -L -o repo.zip "$REPO_URL"; then
+        print_info "URL: $REPO_URL"
+        
+        if curl -L -f -o repo.zip "$REPO_URL" 2>/dev/null; then
             print_success "Repository downloaded"
             
             # Extract the repository
             print_info "Extracting files..."
-            unzip -q repo.zip
+            unzip -q repo.zip 2>/dev/null
+            
+            if [ $? -ne 0 ]; then
+                print_error "Failed to extract repository archive"
+                rm -rf "$TEMP_DIR"
+                exit 1
+            fi
             
             # Find and copy all .blueprint files
             find . -name "*.blueprint" -type f -exec cp {} "$TEMP_DIR/" \;
             
             # Clean up the extracted directory and zip
-            rm -rf "${GITHUB_REPO}-${GITHUB_BRANCH}"
-            rm repo.zip
+            rm -rf "${GITHUB_REPO}-${GITHUB_BRANCH}" 2>/dev/null
+            rm -f repo.zip
             
             print_success "Extracted Blueprint files"
         else
             print_error "Failed to download repository from: $REPO_URL"
-            print_info "Please check your GITHUB_USER, GITHUB_REPO, and GITHUB_BRANCH settings"
+            print_warning "Possible reasons:"
+            echo "  1. Repository doesn't exist or is private"
+            echo "  2. Branch name is incorrect (check if it's 'main' or 'master')"
+            echo "  3. Network connection issue"
+            echo "  4. GitHub URL format is wrong"
+            echo ""
+            print_info "Please verify your settings:"
+            echo "  GITHUB_USER=\"$GITHUB_USER\""
+            echo "  GITHUB_REPO=\"$GITHUB_REPO\""
+            echo "  GITHUB_BRANCH=\"$GITHUB_BRANCH\""
+            echo ""
+            print_info "Try accessing this URL in your browser:"
+            echo "  https://github.com/$GITHUB_USER/$GITHUB_REPO"
             rm -rf "$TEMP_DIR"
             exit 1
         fi
@@ -157,6 +191,8 @@ download_from_github() {
     if [ "$blueprint_count" -eq 0 ]; then
         print_error "No .blueprint files found in the repository"
         print_info "Make sure your repository contains .blueprint addon files"
+        print_warning "Files found in download:"
+        ls -la "$TEMP_DIR/"
         rm -rf "$TEMP_DIR"
         exit 1
     fi
@@ -354,7 +390,9 @@ read_choice() {
     local prompt="$1"
     local choice
     echo -n -e "${GREEN}${prompt}${NC}"
-    read choice
+    read -r choice
+    # Trim whitespace
+    choice=$(echo "$choice" | xargs)
     echo "$choice"
 }
 
