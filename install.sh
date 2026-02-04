@@ -17,9 +17,9 @@ PANEL_DIR="/var/www/pterodactyl"
 BLUEPRINT_DIR="${PANEL_DIR}/blueprint"
 
 # GitHub Configuration - UPDATE THESE VALUES
-GITHUB_USER="yourusername"           # Your GitHub username
-GITHUB_REPO="your-repo-name"         # Your repository name
-GITHUB_BRANCH="main"                 # Branch name (main or master)
+GITHUB_USER="kiruthik123"
+GITHUB_REPO="addons-"
+GITHUB_BRANCH="main"
 
 # Alternative: Direct URLs to .blueprint files (comma-separated)
 # BLUEPRINT_URLS="https://github.com/user/repo/raw/main/addon1.blueprint,https://github.com/user/repo/raw/main/addon2.blueprint"
